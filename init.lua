@@ -23,6 +23,8 @@ License along with this library
 --   github.com/sofar
 --
 
+local function round(x) return x - x%1 + 0.5 end
+
 local mprops = dofile(minetest.get_modpath(minetest.get_current_modname()) .. "/nodes.lua")
 
 local interval = 1.0
@@ -36,14 +38,6 @@ local stat_degraded = 0
 local sealevel = 0
 if not minetest.get_mapgen_params == nil then
 	sealevel = minetest.get_mapgen_params().water_level
-end
-
-local function round(f)
-	if f >= 0 then
-		return math.floor(f + 0.5)
-	else
-		return math.ceil(f - 0.5)
-	end
 end
 
 local walker = {
@@ -103,87 +97,53 @@ local function node_is_air(node)
 end
 
 local function node_is_plant(node)
-	if not node then
-		return false
-	end
-	if node.name == "ignore" then
+	if not node or node.name == "ignore" then
 		return false
 	end
 
-	local name = node.name
-	if not minetest.registered_nodes[name] then
+	local reg = minetest.registered_nodes[node.name]
+	if not reg then
 		return false
 	end
-	local drawtype = minetest.registered_nodes[name]["drawtype"]
-	if drawtype == "plantlike" then
+	local drawtype = reg["drawtype"]
+	if drawtype == "plantlike" or reg.groups.flora == 1 then
 		return true
 	end
 
-	if minetest.registered_nodes[node.name].groups.flora == 1 then
-		return true
-	end
-
-	return ((name == "default:leaves") or
-	        (name == "default:jungleleaves") or
-	        (name == "default:pine_needles") or
-	        (name == "default:cactus"))
+  local allowed = {
+     ["default:leaves"] = true,
+     ["default:jungleleaves"] = true,
+     ["default:pine_needles"] = true,
+     ["default:cactus"] = true,
+  }
+  return allowed[node.name]
 end
 
 local function node_is_water_source(node)
-	if not node then
-		return false
-	end
-	if node.name == "ignore" then
-		return false
-	end
-
-	return (node.name == "default:water_source")
+   return node and (node.name == "default:water_source") or false
 end
 
 local function node_is_water(node)
-	if not node then
-		return false
-	end
-	if node.name == "ignore" then
-		return false
-	end
-
-	return ((node.name == "default:water_source") or
-	        (node.name == "default:water_flowing"))
+   local is_water = { ["default:water_source"]=true, ["default:water_flowing"]=true }
+   return node and is_water[node.name] or false
 end
 
 local function node_is_lava(node)
-	if not node then
-		return false
-	end
-	if node.name == "ignore" then
-		return false
-	end
-
-	return ((node.name == "default:lava_source") or
-	        (node.name == "default:lava_flowing"))
+   local is_lava = { ["default:lava_source"]=true, ["default:lava_flowing"]=true }
+   return node and is_lava[node.name] or false
 end
 
 local function node_is_liquid(node)
-	if not node then
-		return false
-	end
-	if node.name == "ignore" then
+	if not node or node.name == "ignore" then
 		return false
 	end
 
-	local name = node.name
-	if not minetest.registered_nodes[name] then
+	local reg = minetest.registered_nodes[node.name]
+	if not reg then
 		return false
 	end
-	local drawtype = minetest.registered_nodes[name]["drawtype"]
-	if drawtype then
-		if (drawtype == "liquid") or (drawtype == "flowingliquid") then
-			return true
-		end
-	end
-
-	return false
+	local drawtype = reg["drawtype"]
+	return drawtype and ({liquid=true, flowingliquid=true})[drawtype] or false
 end
 
 local function scan_for_water(pos, waterfactor)
@@ -229,26 +189,15 @@ end
 local function node_is_valid_target_for_displacement(pos)
 	local node = minetest.get_node(pos)
 
-	if node_is_liquid(node) then
-		return true
-	elseif node_is_air(node) then
-		return true
-	elseif node_is_plant(node) then
-		return true
-	end
-	return false
+  return node_is_liquid(node) or node_is_air(node) or node_is_plant(node)
 end
 
 local function node_is_locked_in(pos)
-	if
-		node_is_valid_target_for_displacement({x = pos.x - 1, y = pos.y, z = pos.z}) or
-		node_is_valid_target_for_displacement({x = pos.x + 1, y = pos.y, z = pos.z}) or
-		node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z - 1}) or
-		node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z + 1})
-	then
-		return false
-	end
-	return true
+   return
+      node_is_valid_target_for_displacement({x = pos.x - 1, y = pos.y, z = pos.z}) or
+      node_is_valid_target_for_displacement({x = pos.x + 1, y = pos.y, z = pos.z}) or
+      node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z - 1}) or
+      node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z + 1})
 end
 
 local function find_deposit_location(x, y, z)
@@ -267,30 +216,24 @@ local function find_deposit_location(x, y, z)
 end
 
 local function sed()
-	local underliquid = 0
-
 	-- pick a random block in (radius) around (random online player)
 	local playerlist = minetest.get_connected_players()
 	local playercount = table.getn(playerlist)
-	if playercount == 0 then
-		return
-	end
-	local r = math.random(playercount)
-	local randomplayer = playerlist[r]
-	local playerpos = randomplayer:getpos()
-	local pos = {
-		x = math.random(playerpos.x - radius, playerpos.x + radius),
-		y = 0,
-		z = math.random(playerpos.z - radius, playerpos.z + radius)
-	}
+	if playercount ~= 0 then
+     local randomplayer = playerlist[math.random(playercount)]
+     local playerpos = randomplayer:getpos()
 
-	-- keep it in a real circle
-	if (pos.x - playerpos.x) * (pos.x - playerpos.x) + (pos.z - playerpos.z) * (pos.z - playerpos.z) > radius * radius then
-		return
-	end
+     local dx = radius*(2*math.random() - 1)
+     local radius_z = math.sqrt(radius^2 - dx^2)
+     return sed_on_pos{
+        x = math.floor(playerpos.x - dx),
+        y = 0,
+        z = math.floor(playerpos.z + radius_z*(2*math.random() - 1))
+     }
+  end
+end
 
-	stat_considered = stat_considered + 1
-
+local function find_height(pos)
 	-- force load map
 	local vm = minetest.get_voxel_manip()
 	local minp, maxp = vm:read_from_map(
@@ -312,6 +255,7 @@ local function sed()
 	until not node_is_air(minetest.get_node(pos))
 
 	-- then search under water/lava and any see-through plant stuff
+	local underliquid = 0
 	while (node_is_liquid(minetest.get_node(pos))) do
 		underliquid = underliquid + 1
 		pos = pos_below(pos)
@@ -324,6 +268,15 @@ local function sed()
 	if minetest.is_protected(pos, "mod:sedimentology") then
 		return
 	end
+
+  return pos, underliquid
+end
+
+function sed_on_pos(pos)
+	stat_considered = stat_considered + 1
+
+  local pos, underliquid = find_height(pos)
+  if not pos then return end
 
 	local node = minetest.get_node(pos)
 
@@ -397,6 +350,8 @@ local function sed()
 				local tnode = minetest.get_node(tpos)
 
 				if node_is_valid_target_for_displacement(tpos) then
+           print("DISPLACE", node.name)
+
 					-- time to displace the node from pos to tpos
 					minetest.set_node(tpos, node)
 					minetest.sound_play({name = "default_place_node"}, { pos = tpos })
@@ -429,9 +384,8 @@ local function sed()
 		end
 	end
 
-	-- degrade
-
-	-- compensate speed for grass/dirt cycle
+  -- degrade
+  -- compensate speed for grass/dirt cycle
 
 	-- sand only becomes clay under sealevel
 	if ((node.name == "default:sand" or node.name == "default:desert_sand") and (underliquid > 0) and pos.y >= 0.0) then
@@ -448,7 +402,8 @@ local function sed()
 	if node.name == "default:dirt" and underliquid < 1 then
 		-- since we don't have biome information, we'll assume that if there is no sand or
 		-- desert sand anywhere nearby, we shouldn't degrade this block further
-		local fpos = minetest.find_node_near({x = pos.x, y = pos.y + 1, z = pos.z}, 1, {"default:sand", "default:desert_sand"})
+		local fpos = minetest.find_node_near({x = pos.x, y = pos.y + 1, z = pos.z}, 1,
+       {"default:sand", "default:desert_sand"})
 		if not fpos then
 			return
 		end
@@ -477,6 +432,8 @@ local function sed()
 		newmat = mprops[node.name].t[1]
 	end
 
+  print("DEGRADE", node.name, newmat)
+
 	minetest.set_node(pos, {name = newmat})
 
 	stat_degraded = stat_degraded + 1
@@ -491,7 +448,12 @@ local function sedimentology()
 	minetest.after(interval, sedimentology)
 end
 
+
 local function sedcmd(name, param)
+   local function got_privs()
+      return minetest.check_player_privs(name, {server=true})
+   end
+
 	local paramlist = string.split(param, " ")
 	if paramlist[1] == "stats" then
 		local output = "Sedimentology mod statistics:" ..
@@ -501,19 +463,40 @@ local function sedcmd(name, param)
 			"\ndegraded: " .. stat_degraded
 		return true, output
 	elseif paramlist[1] == "blocks" then
-		if not minetest.check_player_privs(name, {server=true}) then
-			return false, "You do not have privileges to execute that command"
-		end
-		if tonumber(paramlist[2]) then
-			count = tonumber(paramlist[2])
-			return true, "Set blocks to " .. count
-		else
-			return true, "Blocks: " .. count
-		end
+     if not got_privs() then
+        return false, "You do not have privileges to execute that command"
+     end
+     if tonumber(paramlist[2]) then
+        count = tonumber(paramlist[2])
+        return true, "Set blocks to " .. count
+     else
+        return true, "Blocks: " .. count
+     end
+  elseif paramlist[1] == "radius" then
+     if not got_privs(name) then
+        return false, "You do not have privileges to execute that command"
+     end
+     if tonumber(paramlist[2]) then
+        radius = tonumber(paramlist[2])
+        return true, "Set radius to " .. radius
+     else
+        return true, "Radius: " .. radius
+     end
+  elseif paramlist[1] == "hit" then
+     if not got_privs() then
+        return false, "You do not have privileges to execute that command"
+     end
+     local pos = minetest.get_player_by_name(name):getpos()
+     minetest.sound_play({name = "default_place_node"}, { pos = pos })
+     local n = math.max(tonumber(paramlist[2]) or 1, 100)
+     for _ = 1,n do sed_on_pos(pos) end
 	else
-		return false, "/sed [blocks|stats|help]\n" ..
-			"blocks    - get or set block count per interval (requires 'server' privs)\n" ..
-			"stats     - display operational statistics"
+     return false, [[/sed [blocks|radius|stats|help|hit]\n" ..
+blocks    - get or set block count per interval (requires 'server' privs)\n
+radius    - change the radius (same privs)
+stats     - display operational statistics
+hit       - hit an element with sedimentation.(server privs)
+            Only has a probability of success]]
 	end
 	return true, "Command completed succesfully"
 end
