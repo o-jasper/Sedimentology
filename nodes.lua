@@ -34,7 +34,7 @@ return {
 	["default:desert_stone"]
 		= { h = 0.01, r = 0.01, t = { "default:desert_cobble" }},
 	["default:stone"]
-		= { h = 0.01, r = 0.01, t = { "default:cobblestone", "default:desert_cobble" }},
+		= { h = 0.01, r = 0.01, t = { "default:cobble", "default:desert_cobble" }},
 	["default:stone_with_coal"]
 		= { h = 0.0001, r = 0.01, t = { "default:stone", "default:desert_stone" }},
 	["default:stone_with_iron"]
