@@ -169,6 +169,7 @@ local function full_drop(pos)
    return pos
 end
 
+-- (NOTE disadvantage is lots of looking at map.)
 -- Walks down to maximum cnt. `h` is fall height.
 local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
    if cnt > max_cnt then return { x=x, y=y, z=z } end
@@ -185,7 +186,8 @@ local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
       if valid(cx,cy,cz) then
          local unfinished = true
          while unfinished do -- Requirement to go down.
-            if math.ceil(slope*cnt) < h then  -- Represent minimume slope.
+            -- Represent minimum slope, or breakage.
+            if math.ceil(slope*cnt) < h or (props.break_p and roll(props.break_p)) then
                local tpos = _deposit_walk(x + cx,y + cy,z + cz, props,
                                           cnt + 1, h, max_cnt)
                if tpos then
@@ -207,8 +209,8 @@ local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
 end
 
 local function deposit_walk(pos, props)
-   return _deposit_walk(pos.x, pos.y, pos.z, props, 1,0,
-                        math.random(props.min_cnt or 1, props.max_cnt or 3))
+   return _deposit_walk(pos.x, pos.y, pos.z, props, 0,0,
+                        math.random(props.min_cnt or 2, props.max_cnt or 3))
 end
 
 local function sed()
@@ -321,6 +323,7 @@ function sed_on_pos(pos)
 				return
 			end
       -- time to displace the node from pos to tpos
+      node.name = props.drop_as or node.name -- Change the name if relevant.
       minetest.set_node(tpos, node)
       minetest.sound_play({name = "default_place_node"}, { pos = tpos })
       minetest.get_meta(tpos):from_table(minetest.get_meta(pos):to_table())
@@ -415,7 +418,7 @@ local function sedimentology()
 end
 
 
-local function sedcmd(name, param)
+local function sed_cmd(name, param)
    local function got_privs()
       return minetest.check_player_privs(name, {server=true})
    end
@@ -481,7 +484,7 @@ end
 minetest.register_chatcommand("sed", {
 	params = "stats|...",
 	description = "Various action commands for the sedimentology mod",
-	func = sedcmd
+	func = sed_cmd
 })
 
 minetest.after(interval, sedimentology)

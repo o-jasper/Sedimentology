@@ -10,17 +10,17 @@ return {
 	["default:dirt"]
 		= { h = 1.0, r = 1.0, t = { "default:sand", "default:desert_sand" }},
 	["default:dirt_with_grass"]
-		= { h = 1.0, r = 1.0, t = { "default:dirt" }},
+		= { h = 1.0, r = 1.0, t = { "default:dirt" }, drop_as="default:dirt"},
 	["default:dirt_with_grass_footsteps"]
-		= { h = 1.0, r = 1.0, t = { "default:dirt" }},
+		= { h = 1.0, r = 1.0, t = { "default:dirt" }, drop_as="default:dirt"},
 	["default:dirt_with_snow"]
-		= { h = 1.0, r = 1.0, t = { "default:dirt" }},
+		= { h = 1.0, r = 1.0, t = { "default:dirt" }, drop_as="default:dirt"},
 	["default:sand"]
-		= { h = 0.01, r = 1.0, t = { "default:clay" }},
+     = { h = 0.01, r = 1.0, t = { "default:clay" }, slope=0.51 },
 	["default:desert_sand"]
-		= { h = 0.01, r = 1.0, t = { "default:clay" }},
+		= { h = 0.01, r = 1.0, t = { "default:clay" }, slope=0.51 },
 	["default:gravel"]
-		= { h = 0.15, r = 0.7, t = { "default:dirt" }},
+    = { h = 0.15, r = 0.5, t = { "default:dirt" }, slope=0.7, min_cnt=3,max_cnt=4 },
 	["default:clay"]
 		= { h = 0.0, r = 0.3, t = { "default:clay" }},
 	["default:sandstone"]
@@ -50,13 +50,13 @@ return {
 
 	-- mg
 	["mg:dirt_with_dry_grass"]
-		= { h = 1.0, r = 1.0, t = { "default:dirt" }},
+		= { h = 1.0, r = 1.0, t = { "default:dirt" }, drop_as="default:dirt"},
 
 	-- woodsoils
 	["woodsoils:dirt_with_leaves_1"]
-		= { h = 1.0, r = 1.0, t = { "default:dirt" }},
+     = { h = 1.0, r = 1.0, t = { "default:dirt" }},
 	["woodsoils:dirt_with_leaves_2"]
-		= { h = 1.0, r = 1.0, t = { "woodsoils:dirt_with_leaves_1" }},
+     = { h = 1.0, r = 1.0, t = { "woodsoils:dirt_with_leaves_1" }},
 	["woodsoils:grass_with_leaves_1"]
 		= { h = 1.0, r = 1.0, t = { "woodsoils:dirt_with_leaves_2" }},
 	["woodsoils:grass_with_leaves_2"]
