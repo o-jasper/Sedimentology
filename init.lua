@@ -40,38 +40,6 @@ if not minetest.get_mapgen_params == nil then
 	sealevel = minetest.get_mapgen_params().water_level
 end
 
-local walker = {
-	[0] = {x = 0, z = 1},  {x = 1, z = 0},   {x = 0, z = -1}, {x = -1, z = 0},
-	{x = 1, z = 1},  {x = 1, z = -1},  {x = -1, z = 1}, {x = -1, z = -1},
-	{x = 2, z = 0},  {x = -2, z = 0},  {x = 0, z = 2},  {x = 0, z = -2},
-	{x = 2, z = 1},  {x = 2, z = -1},  {x = 1, z = 2},  {x = 1, z = -2},
-	{x = -1, z = 2}, {x = -1, z = -2}, {x = -2, z = 1}, {x = -2, z = -1},
-	{x = 2, z = 2},  {x = -2, z = 2},  {x = 2, z = -2}, {x = -2, z = -2}
-}
-local walker_step = 0
-local walker_start = 0
-local walker_phase = 4
-
-local function walker_f(x, y)
-	if x == 0 and y == 0 then
-		walker_step = 0
-	end
-
-	if walker_step == 0 or walker_step == 4 or walker_step == 8 or walker_step == 24 then
-		walker_start = math.random(4) - 1
-		walker_phase = 4
-	elseif walker_step == 12 then
-		walker_start = math.random(8) - 1
-		walker_phase = 8
-	end
-
-	local section_start = walker_step - (walker_step % walker_phase)
-	local section_part = ((walker_step - section_start) + walker_start) % walker_phase
-
-	walker_step = walker_step + 1
-	return walker[section_start + section_part]
-end
-
 local function roll(chance)
 	return (math.random() >= chance)
 end
@@ -189,30 +157,58 @@ end
 local function node_is_valid_target_for_displacement(pos)
 	local node = minetest.get_node(pos)
 
-  return node_is_liquid(node) or node_is_air(node) or node_is_plant(node)
+  return node_is_liquid(node) or node_is_air(node) or node_is_plant(node) and node or nil
 end
 
-local function node_is_locked_in(pos)
-   return
-      node_is_valid_target_for_displacement({x = pos.x - 1, y = pos.y, z = pos.z}) or
-      node_is_valid_target_for_displacement({x = pos.x + 1, y = pos.y, z = pos.z}) or
-      node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z - 1}) or
-      node_is_valid_target_for_displacement({x = pos.x, y = pos.y, z = pos.z + 1})
+-- Drop until cannot fall further.
+local function full_drop(pos)
+   while node_is_valid_target_for_displacement(pos) do
+      pos.y = pos.y - 1
+   end
+   pos.y = pos.y + 1
+   return pos
 end
 
-local function find_deposit_location(x, y, z)
-	local yy = y
-	while true do
-		if node_is_valid_target_for_displacement({x = x, y = yy - 1, z = z}) then
-			yy = yy - 1
-			if yy < -32768 then
-				break
-			end
-		else
-			break
-		end
-	end
-	return yy
+-- Walks down to maximum cnt. `h` is fall height.
+local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
+   if cnt > max_cnt then return { x=x, y=y, z=z } end
+
+   local function valid(dx,dy,dz)
+      return node_is_valid_target_for_displacement{x=x+dx, y=y+dy, z=z+dz} 
+   end
+   local slope = props.slope or 1
+
+   local step = {{0,0,1},{1,0,0}, {0,0,-1},{-1,0,0}}
+   local k,s = math.random(4), 2*math.random(2)-3 -- randomly pick start, direction.
+   for _ = 1,4 do
+      local cx,cy,cz = unpack(step[1 + k%4])
+      if valid(cx,cy,cz) then
+         local unfinished = true
+         while unfinished do -- Requirement to go down.
+            if math.ceil(slope*cnt) < h then  -- Represent minimume slope.
+               local tpos = _deposit_walk(x + cx,y + cy,z + cz, props,
+                                          cnt + 1, h, max_cnt)
+               if tpos then
+                  -- If sticky, do the probability, otherwise, drop.
+                  return props.sticky and roll(props.sticky) and tpos or
+                     full_drop(tpos)
+               end
+               unfinished = false
+            elseif valid(cx,cy-1,cz) then  -- Drop one.
+               cy = cy - 1
+               h = h + 1
+            else
+               unfinished = false
+            end
+         end
+      end
+      k = k + s
+   end
+end
+
+local function deposit_walk(pos, props)
+   return _deposit_walk(pos.x, pos.y, pos.z, props, 1,0,
+                        math.random(props.min_cnt or 1, props.max_cnt or 3))
 end
 
 local function sed()
@@ -283,8 +279,10 @@ function sed_on_pos(pos)
 
 	local node = minetest.get_node(pos)
 
+  local props = mprops[node.name] -- Get properties.
+
 	-- do we handle this material?
-	if not mprops[node.name] then
+	if not props then
 		return
 	end
 
@@ -296,18 +294,15 @@ function sed_on_pos(pos)
 		waterfactor = scan_for_water(pos, waterfactor)
 	end
 
-	if roll(waterfactor) then
+  -- Throw some proabilities together.
+  local p_here = waterfactor *
+     (underliquid and pos.y <= sealevel and 2.0 * math.pow(0.5, 0.0 - pos.y) or 1)
+
+	if roll(p_here) then
 		return
 	end
 
-	-- slow down deeper under sea level (wave action reduced energy)
-	if underliquid and pos.y <= sealevel then
-		if roll(2.0 * math.pow(0.5, 0.0 - pos.y)) then
-			return
-		end
-	end
-
-	-- factor in vegetation that slows erosion down
+	-- factor in vegetation that slows erosion down (separate because the above prevents.)
 	if roll(scan_for_vegetation(pos)) then
 		return
 	end
@@ -316,77 +311,46 @@ function sed_on_pos(pos)
 	-- it's not easier to move the material first. If that fails, we'll
 	-- end up degrading the material as calculated
 
-	if not node_is_locked_in(pos) then
-		local steps = 8
-
-		if node.name == "default:sand" or
-		   node.name == "default:desert_sand" or
-		   (underliquid > 0) then
-			steps = 24
-		else
-			steps = 8
-		end
+	if debug_mode == "displace" or not roll(props.r) then
 
 		-- walker algorithm here
-		local lowest = pos.y
-		local lowesto = {x = pos.x, z = pos.z}
-		local o = {x = 0, z = 0}
+     local tpos = deposit_walk(pos, props)
 
-		for step = 1, steps, 1 do
-			o = walker_f(o.x, o.z)
-			local h = find_deposit_location(pos.x + o.x, lowest, pos.z + o.z)
-
-			if h < lowest then
-				lowest = h
-				lowesto = o
-			end
-		end
-
-		if lowest < pos.y then
-			local tpos = {x = pos.x + lowesto.x, y = lowest, z = pos.z + lowesto.z}
-
-			if debug_mode ~= "displace" and minetest.is_protected(tpos, "mod:sedimentology") then
+		if tpos then
+			if minetest.is_protected(tpos, "mod:sedimentology") then
 				return
 			end
+      -- time to displace the node from pos to tpos
+      minetest.set_node(tpos, node)
+      minetest.sound_play({name = "default_place_node"}, { pos = tpos })
+      minetest.get_meta(tpos):from_table(minetest.get_meta(pos):to_table())
+      minetest.remove_node(pos)
 
-			if debug_mode == "displace" or not roll(mprops[node.name].r) then
-				local tnode = minetest.get_node(tpos)
+      stat_displaced = stat_displaced + 1
 
-				if node_is_valid_target_for_displacement(tpos) then
-					-- time to displace the node from pos to tpos
-					minetest.set_node(tpos, node)
-					minetest.sound_play({name = "default_place_node"}, { pos = tpos })
-					minetest.get_meta(tpos):from_table(minetest.get_meta(pos):to_table())
-					minetest.remove_node(pos)
+      -- fix water edges at or below sea level.
+      if pos.y > sealevel then
+         return
+      end
 
-					stat_displaced = stat_displaced + 1
-
-					-- fix water edges at or below sea level.
-					if pos.y > sealevel then
-						return
-					end
-
-          local function is_water_source(dx,dz)
-             return node_is_water_source(minetest.get_node{
-                                            x = pos.x + dx, y = pos.y, z = pos.z + dz})
-          end
-          local function is_air(dx,dz)
-             return node_is_air(minetest.get_node{
-                                   x = pos.x + dx, y = pos.y, z = pos.z + dz})
-          end
-					if (is_water_source(-1,0) or is_water_source(1,0) or
-              is_water_source(0,-1) or is_water_source(0,1)) and
-             (is_air(-1,0) or is_air(1,0) or is_air(0,-1) or is_air(0,1)) then
-						-- instead of air, leave a water node
-						minetest.set_node(pos, { name = "default:water_source"})
-					end
-
-					-- done - don't degrade this block further
-					return
-				end
-			end
-		end
-	end
+      local function is_water_source(dx,dz)
+         return node_is_water_source(minetest.get_node{
+                                        x = pos.x + dx, y = pos.y, z = pos.z + dz})
+      end
+      local function is_air(dx,dz)
+         return node_is_air(minetest.get_node{
+                               x = pos.x + dx, y = pos.y, z = pos.z + dz})
+      end
+      if (is_water_source(-1,0) or is_water_source(1,0) or
+          is_water_source(0,-1) or is_water_source(0,1)) and
+      (is_air(-1,0) or is_air(1,0) or is_air(0,-1) or is_air(0,1)) then
+         -- instead of air, leave a water node
+         minetest.set_node(pos, { name = "default:water_source"})
+      end
+      -- done - don't degrade this block further
+      return
+    end
+  end
 
   -- degrade
   -- compensate speed for grass/dirt cycle
@@ -413,27 +377,27 @@ function sed_on_pos(pos)
 		end
 	end
 
-	if debug_mode ~= "degrade" and roll(mprops[node.name].h) then
+	if debug_mode ~= "degrade" and roll(props.h) then
 		return
 	end
 
 	-- finally, determine new material type
 	local newmat = "air"
 
-	if table.getn(mprops[node.name].t) > 1 then
+	if table.getn(props.t) > 1 then
 		-- multiple possibilities, scan area around for best suitable type
-		for i = table.getn(mprops[node.name].t), 2, -1 do
-			local fpos = minetest.find_node_near(pos, 5, mprops[node.name].t[i])
+		for i = table.getn(props.t), 2, -1 do
+			local fpos = minetest.find_node_near(pos, 5, props.t[i])
 			if fpos then
-				newmat = mprops[node.name].t[i]
+				newmat = props.t[i]
 				break
 			end
 		end
 		if newmat == "air" then
-			newmat = mprops[node.name].t[1]
+			newmat = props.t[1]
 		end
 	else
-		newmat = mprops[node.name].t[1]
+		newmat = props.t[1]
 	end
 
 	minetest.set_node(pos, {name = newmat})
