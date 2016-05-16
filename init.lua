@@ -58,10 +58,10 @@ local function walker_f(x, y)
 	end
 
 	if walker_step == 0 or walker_step == 4 or walker_step == 8 or walker_step == 24 then
-		walker_start = math.floor(math.random() * 4.0)
+		walker_start = math.random(4) - 1
 		walker_phase = 4
 	elseif walker_step == 12 then
-		walker_start = math.floor(math.random() * 8.0)
+		walker_start = math.random(8) - 1
 		walker_phase = 8
 	end
 
@@ -272,6 +272,8 @@ local function find_height(pos)
   return pos, underliquid
 end
 
+local allow_debug = true
+local debug_mode
 
 function sed_on_pos(pos)
 	stat_considered = stat_considered + 1
@@ -343,11 +345,11 @@ function sed_on_pos(pos)
 		if lowest < pos.y then
 			local tpos = {x = pos.x + lowesto.x, y = lowest, z = pos.z + lowesto.z}
 
-			if minetest.is_protected(tpos, "mod:sedimentology") then
+			if debug_mode ~= "displace" and minetest.is_protected(tpos, "mod:sedimentology") then
 				return
 			end
 
-			if not roll(mprops[node.name].r) then
+			if debug_mode == "displace" or not roll(mprops[node.name].r) then
 				local tnode = minetest.get_node(tpos)
 
 				if node_is_valid_target_for_displacement(tpos) then
@@ -411,7 +413,7 @@ function sed_on_pos(pos)
 		end
 	end
 
-	if roll(mprops[node.name].h) then
+	if debug_mode ~= "degrade" and roll(mprops[node.name].h) then
 		return
 	end
 
@@ -454,49 +456,60 @@ local function sedcmd(name, param)
       return minetest.check_player_privs(name, {server=true})
    end
 
-	local paramlist = string.split(param, " ")
-	if paramlist[1] == "stats" then
+  local cmd, arg1 = unpack(string.split(param, " "))  -- Do more as needed, of course.
+
+	if cmd == "stats" then
 		local output = "Sedimentology mod statistics:" ..
 			"\nradius: " .. radius .. ", blocks: " .. count ..
 			"\nconsidered: " .. stat_considered ..
 			"\ndisplaced: " .. stat_displaced ..
 			"\ndegraded: " .. stat_degraded
 		return true, output
-	elseif paramlist[1] == "blocks" then
+	elseif cmd == "blocks" then
      if not got_privs() then
         return false, "You do not have privileges to execute that command"
      end
-     if tonumber(paramlist[2]) then
-        count = tonumber(paramlist[2])
+     if tonumber(arg1) then
+        count = tonumber(arg1)
         return true, "Set blocks to " .. count
      else
         return true, "Blocks: " .. count
      end
-  elseif paramlist[1] == "radius" then
+  elseif cmd == "radius" then
      if not got_privs(name) then
         return false, "You do not have privileges to execute that command"
      end
-     if tonumber(paramlist[2]) then
-        radius = tonumber(paramlist[2])
+     if tonumber(arg1) then
+        radius = tonumber(arg1)
         return true, "Set radius to " .. radius
      else
         return true, "Radius: " .. radius
      end
-  elseif paramlist[1] == "hit" then
+  elseif cmd == "hit" then
      if not got_privs() then
         return false, "You do not have privileges to execute that command"
      end
      local pos = minetest.get_player_by_name(name):getpos()
      minetest.sound_play({name = "default_place_node"}, { pos = pos })
-     local n = math.max(tonumber(paramlist[2]) or 1, 100)
+     local n = math.max(tonumber(arg1) or 1, 100)
      for _ = 1,n do sed_on_pos(pos) end
+  elseif cmd == "debug" then
+     if allow_debug then
+        debug_mode = arg1
+        return true, "set debug_mode: " .. (debug_mode or "nil")
+     else
+        return false, "Debug is disabled"
+     end
 	else
      return false, [[/sed [blocks|radius|stats|help|hit]\n" ..
 blocks    - get or set block count per interval (requires 'server' privs)\n
 radius    - change the radius (same privs)
 stats     - display operational statistics
 hit       - hit an element with sedimentation.(server privs)
-            Only has a probability of success]]
+            Only has a probability of success]] .. (allow_debug and [[
+
+debug     - Debug modes. `sed debug degrade` for always-degrade and
+            `.. displace` for the other one]])
 	end
 	return true, "Command completed succesfully"
 end
