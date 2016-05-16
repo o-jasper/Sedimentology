@@ -272,6 +272,7 @@ local function find_height(pos)
   return pos, underliquid
 end
 
+
 function sed_on_pos(pos)
 	stat_considered = stat_considered + 1
 
@@ -350,8 +351,6 @@ function sed_on_pos(pos)
 				local tnode = minetest.get_node(tpos)
 
 				if node_is_valid_target_for_displacement(tpos) then
-           print("DISPLACE", node.name)
-
 					-- time to displace the node from pos to tpos
 					minetest.set_node(tpos, node)
 					minetest.sound_play({name = "default_place_node"}, { pos = tpos })
@@ -365,14 +364,17 @@ function sed_on_pos(pos)
 						return
 					end
 
-					if (node_is_water_source(minetest.get_node({x = pos.x - 1, y = pos.y, z = pos.z})) or
-					    node_is_water_source(minetest.get_node({x = pos.x + 1, y = pos.y, z = pos.z})) or
-					    node_is_water_source(minetest.get_node({x = pos.x, y = pos.y, z = pos.z - 1})) or
-					    node_is_water_source(minetest.get_node({x = pos.x, y = pos.y, z = pos.z + 1}))) and
-					   (not node_is_air(minetest.get_node({x = pos.x - 1, y = pos.y, z = pos.z})) and
-					    not node_is_air(minetest.get_node({x = pos.x + 1, y = pos.y, z = pos.z})) and
-					    not node_is_air(minetest.get_node({x = pos.x, y = pos.y, z = pos.z - 1})) and
-					    not node_is_air(minetest.get_node({x = pos.x, y = pos.y, z = pos.z + 1}))) then
+          local function is_water_source(dx,dz)
+             return node_is_water_source(minetest.get_node{
+                                            x = pos.x + dx, y = pos.y, z = pos.z + dz})
+          end
+          local function is_air(dx,dz)
+             return node_is_air(minetest.get_node{
+                                   x = pos.x + dx, y = pos.y, z = pos.z + dz})
+          end
+					if (is_water_source(-1,0) or is_water_source(1,0) or
+              is_water_source(0,-1) or is_water_source(0,1)) and
+             (is_air(-1,0) or is_air(1,0) or is_air(0,-1) or is_air(0,1)) then
 						-- instead of air, leave a water node
 						minetest.set_node(pos, { name = "default:water_source"})
 					end
@@ -431,8 +433,6 @@ function sed_on_pos(pos)
 	else
 		newmat = mprops[node.name].t[1]
 	end
-
-  print("DEGRADE", node.name, newmat)
 
 	minetest.set_node(pos, {name = newmat})
 
