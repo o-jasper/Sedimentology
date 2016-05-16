@@ -172,7 +172,9 @@ end
 -- (NOTE disadvantage is lots of looking at map.)
 -- Walks down to maximum cnt. `h` is fall height.
 local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
-   if cnt > max_cnt then return { x=x, y=y, z=z } end
+   if cnt > max_cnt then
+      return h > 0 and { x=x, y=y, z=z } -- Has to drop at least one.
+   end
 
    local function valid(dx,dy,dz)
       return node_is_valid_target_for_displacement{x=x+dx, y=y+dy, z=z+dz} 
@@ -187,7 +189,7 @@ local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
          local unfinished = true
          while unfinished do -- Requirement to go down.
             -- Represent minimum slope, or breakage.
-            if math.ceil(slope*cnt) < h or (props.break_p and roll(props.break_p)) then
+            if math.floor(slope*cnt) <= h or (props.break_p and roll(props.break_p)) then
                local tpos = _deposit_walk(x + cx,y + cy,z + cz, props,
                                           cnt + 1, h, max_cnt)
                if tpos then
@@ -300,17 +302,18 @@ function sed_on_pos(pos)
 	end
 
   -- Throw some probabilities together.
-  local p_here = waterfactor *
-     (underliquid and pos.y <= sealevel and 2.0 * math.pow(0.5, 0.0 - pos.y) or 1)
-
-	if roll(p_here) then
-		return
-	end
-
-	-- factor in vegetation that slows erosion down (separate because the above prevents.)
-	if roll(scan_for_vegetation(pos)) then
-		return
-	end
+  if not debug_mode then
+     local p_water = waterfactor
+     local p_sealevel = (underliquid and pos.y <= sealevel and 2.0 * math.pow(0.5, 0.0 - pos.y) or 1)
+     if roll(p_water*p_sealevel) then
+        return
+     end
+     -- factor in vegetation that slows erosion down (separate because the above prevents.)
+     local p_veg = scan_for_vegetation(pos)
+     if roll(p_veg) then
+        return
+     end
+  end
 
 	-- displacement - before we erode this material, we check to see if
 	-- it's not easier to move the material first. If that fails, we'll
