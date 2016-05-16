@@ -16,11 +16,11 @@ return {
 	["default:dirt_with_snow"]
 		= { h = 1.0, r = 1.0, t = { "default:dirt" }, drop_as="default:dirt"},
 	["default:sand"]
-     = { h = 0.01, r = 1.0, t = { "default:clay" }, slope=0.5, min_cnt=3,max_cnt=4 },
+     = { h = 0.01, r = 1.0, t = { "default:clay" }, slope=1, min_cnt=3,max_cnt=4 },
 	["default:desert_sand"]
-		= { h = 0.01, r = 1.0, t = { "default:clay" }, slope=0.5, min_cnt=3,max_cnt=4 },
+		= { h = 0.01, r = 1.0, t = { "default:clay" }, slope=1.1, min_cnt=3,max_cnt=4 },
 	["default:gravel"]
-    = { h = 0.15, r = 0.5, t = { "default:dirt" }, slope=0.7, min_cnt=3,max_cnt=4 },
+    = { h = 0.15, r = 0.5, t = { "default:dirt" }, slope=0.8, min_cnt=3,max_cnt=4 },
 	["default:clay"]
 		= { h = 0.0, r = 0.3, t = { "default:clay" }},
 	["default:sandstone"]

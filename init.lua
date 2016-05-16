@@ -179,7 +179,7 @@ local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
    local function valid(dx,dy,dz)
       return node_is_valid_target_for_displacement{x=x+dx, y=y+dy, z=z+dz} 
    end
-   local slope = props.slope or 1
+   local slope = props.slope or 1.6
 
    local step = {{0,0,1},{1,0,0}, {0,0,-1},{-1,0,0}}
    local k,s = math.random(4), 2*math.random(2)-3 -- randomly pick start, direction.
