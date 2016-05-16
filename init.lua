@@ -273,6 +273,9 @@ end
 local allow_debug = true
 local debug_mode
 
+-- TODO `find_height` probes the map, and often subsequently nothing happens.
+-- Expensive...
+
 function sed_on_pos(pos)
 	stat_considered = stat_considered + 1
 
@@ -296,7 +299,7 @@ function sed_on_pos(pos)
 		waterfactor = scan_for_water(pos, waterfactor)
 	end
 
-  -- Throw some proabilities together.
+  -- Throw some probabilities together.
   local p_here = waterfactor *
      (underliquid and pos.y <= sealevel and 2.0 * math.pow(0.5, 0.0 - pos.y) or 1)
 
@@ -432,15 +435,15 @@ local function sed_cmd(name, param)
 			"\ndisplaced: " .. stat_displaced ..
 			"\ndegraded: " .. stat_degraded
 		return true, output
-	elseif cmd == "blocks" then
+	elseif cmd == "rate" then
      if not got_privs() then
         return false, "You do not have privileges to execute that command"
      end
      if tonumber(arg1) then
         count = tonumber(arg1)
-        return true, "Set blocks to " .. count
+        return true, "Set blocks changing rate to " .. count
      else
-        return true, "Blocks: " .. count
+        return true, "Blocks changing rate: " .. count
      end
   elseif cmd == "radius" then
      if not got_privs(name) then
@@ -469,7 +472,7 @@ local function sed_cmd(name, param)
      end
 	else
      return false, [[/sed [blocks|radius|stats|help|hit]\n" ..
-blocks    - get or set block count per interval (requires 'server' privs)\n
+rate      - get or set block count per interval (requires 'server' privs)\n
 radius    - change the radius (same privs)
 stats     - display operational statistics
 hit       - hit an element with sedimentation.(server privs)
