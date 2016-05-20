@@ -179,7 +179,7 @@ local function _deposit_walk(x,y,z, props, cnt,h, max_cnt)
    local function valid(dx,dy,dz)
       return node_is_valid_target_for_displacement{x=x+dx, y=y+dy, z=z+dz} 
    end
-   local slope = props.slope or 1.6
+   local slope = props.slope or 2
 
    local step = {{0,0,1},{1,0,0}, {0,0,-1},{-1,0,0}}
    local k,s = math.random(4), 2*math.random(2)-3 -- randomly pick start, direction.
@@ -433,7 +433,7 @@ local function sed_cmd(name, param)
 
 	if cmd == "stats" then
 		local output = "Sedimentology mod statistics:" ..
-			"\nradius: " .. radius .. ", blocks: " .. count ..
+			"\nradius: " .. radius .. ", rate: " .. count ..
 			"\nconsidered: " .. stat_considered ..
 			"\ndisplaced: " .. stat_displaced ..
 			"\ndegraded: " .. stat_degraded
@@ -474,7 +474,7 @@ local function sed_cmd(name, param)
         return false, "Debug is disabled"
      end
 	else
-     return false, [[/sed [blocks|radius|stats|help|hit]\n" ..
+     return false, [[/sed [rate|radius|stats|help|hit]\n" ..
 rate      - get or set block count per interval (requires 'server' privs)\n
 radius    - change the radius (same privs)
 stats     - display operational statistics
